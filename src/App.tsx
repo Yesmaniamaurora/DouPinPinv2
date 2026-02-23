@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Upload, Download, Image as ImageIcon, Loader2, Settings2, Lock, LayoutGrid, Sparkles, ShieldCheck, History, Key, Trash2, CheckCircle2, XCircle, LogOut } from 'lucide-react';
 import { PerlerBeadGenerator, Algorithm } from './core/generator';
-import { PaletteKey, brandNames } from './core/color_utils';
+import { PaletteKey, brandNames, palettes, deltaE } from './core/color_utils';
 import { getBrowserFingerprint } from './core/fingerprint';
 
 type Tab = 'base' | 'advanced' | 'admin';
@@ -40,6 +40,7 @@ export default function App() {
   // BFS States
   const [bfsThreshold, setBfsThreshold] = useState<number>(15);
   const [isBfsMode, setIsBfsMode] = useState<boolean>(false);
+  const [missingColorCode, setMissingColorCode] = useState<string | null>(null);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -230,6 +231,7 @@ export default function App() {
     } else {
       setSelectedColorCodes(prev => prev.includes(code) && prev.length === 1 ? [] : [code]);
     }
+    setMissingColorCode(code);
   };
 
   const clearSelection = () => {
@@ -820,117 +822,177 @@ export default function App() {
 
         {/* Intelligent Color Seeking Section */}
         <div className="bg-white rounded-2xl shadow-sm border border-[#a3bdb2]/40 p-6 min-h-[600px] flex flex-col space-y-6">
-        <div className="flex items-center justify-between border-b border-[#a3bdb2]/30 pb-4">
-          <div className="flex items-center gap-2">
-            <Sparkles className="w-6 h-6 text-[#20243F]" />
-            <h2 className="text-xl font-bold text-[#20243F]">智能寻色辅助 <span className="text-neutral-400 text-sm font-normal ml-1">Intelligent Color Seeking</span></h2>
-          </div>
-          <div className="flex items-center gap-3">
-            <button 
-              onClick={() => setIsLocked(!isLocked)}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                isLocked ? 'bg-[#20243F] text-white' : 'bg-[#a3bdb2]/20 text-[#20243F] hover:bg-[#a3bdb2]/30'
-              }`}
-            >
-              {isLocked ? <Lock className="w-4 h-4" /> : <LayoutGrid className="w-4 h-4" />}
-              {isLocked ? '多选锁定中' : '单选模式'}
-            </button>
-            <button 
-              onClick={clearSelection}
-              className="px-3 py-1.5 rounded-lg text-sm font-medium bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
-            >
-              清除选择
-            </button>
-          </div>
-        </div>
-
-        {!resultImage ? (
-          <div className="flex-1 flex flex-col items-center justify-center text-neutral-400 py-20">
-            <ImageIcon className="w-16 h-16 mb-4 opacity-20" />
-            <p>请先在“基础”页生成图纸<br/><span className="text-sm">Please generate pattern in Base tab first</span></p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 flex-1">
-            {/* Interactive Canvas */}
-            <div className="lg:col-span-8 bg-neutral-100 rounded-xl border border-[#a3bdb2]/30 overflow-hidden flex items-center justify-center relative group">
-              <div className="w-full h-full overflow-auto p-4 flex items-center justify-center">
-                <img 
-                  src={resultImage} 
-                  alt="Interactive Pattern" 
-                  className="max-w-none shadow-lg cursor-crosshair transition-all"
-                  onClick={handleCanvasClick}
-                  style={{ maxHeight: '750px' }}
-                />
-              </div>
-              <div className="absolute top-4 left-4 bg-white/90 backdrop-blur px-3 py-1.5 rounded-lg shadow-sm border border-[#a3bdb2]/30 text-xs font-medium text-[#20243F] opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                点击格子定位色号 Click cell to seek color
-              </div>
+          <div className="flex items-center justify-between border-b border-[#a3bdb2]/30 pb-4">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-6 h-6 text-[#20243F]" />
+              <h2 className="text-xl font-bold text-[#20243F]">智能寻色辅助 <span className="text-neutral-400 text-sm font-normal ml-1">Intelligent Color Seeking</span></h2>
             </div>
+            <div className="flex items-center gap-3">
+              <button 
+                onClick={() => setIsLocked(!isLocked)}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                  isLocked ? 'bg-[#20243F] text-white' : 'bg-[#a3bdb2]/20 text-[#20243F] hover:bg-[#a3bdb2]/30'
+                }`}
+              >
+                {isLocked ? <Lock className="w-4 h-4" /> : <LayoutGrid className="w-4 h-4" />}
+                {isLocked ? '多选锁定中' : '单选模式'}
+              </button>
+              <button 
+                onClick={clearSelection}
+                className="px-3 py-1.5 rounded-lg text-sm font-medium bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
+              >
+                清除选择
+              </button>
+            </div>
+          </div>
 
-            {/* Color Palette List */}
-            <div className="lg:col-span-4 flex flex-col space-y-4">
-              <div className="bg-neutral-50 rounded-xl p-4 border border-[#a3bdb2]/20 flex-1 overflow-hidden flex flex-col">
-                <h3 className="text-sm font-bold text-[#20243F] mb-3 flex items-center gap-2">
-                  <LayoutGrid className="w-4 h-4" />
-                  本图色号清单 <span className="text-xs font-normal opacity-60">Color List</span>
-                </h3>
-                <div className="flex-1 overflow-y-auto pr-2 space-y-2 custom-scrollbar">
-                  {grid && (() => {
-                    const statsMap = new Map<string, { color: any, count: number }>();
-                    grid.flat().forEach(cell => {
-                      if (!statsMap.has(cell.code)) statsMap.set(cell.code, { color: cell, count: 0 });
-                      statsMap.get(cell.code)!.count++;
-                    });
-                    return Array.from(statsMap.values())
-                      .sort((a, b) => b.count - a.count)
-                      .map(({ color, count }) => {
-                        const isSelected = selectedColorCodes.includes(color.code);
-                        return (
-                          <button
-                            key={color.code}
-                            onClick={() => toggleColorSelection(color.code)}
-                            className={`w-full flex items-center gap-3 p-2 rounded-lg border transition-all ${
-                              isSelected 
-                                ? 'bg-[#20243F] border-[#20243F] text-white shadow-md scale-[1.02]' 
-                                : 'bg-white border-[#a3bdb2]/30 text-[#20243F] hover:border-[#20243F]/50'
-                            }`}
-                          >
-                            <div 
-                              className="w-8 h-8 rounded shadow-inner flex items-center justify-center text-[10px] font-bold"
-                              style={{ 
-                                backgroundColor: `rgb(${color.rgb[0]}, ${color.rgb[1]}, ${color.rgb[2]})`,
-                                color: (0.299 * color.rgb[0] + 0.587 * color.rgb[1] + 0.114 * color.rgb[2]) > 128 ? '#000' : '#fff'
-                              }}
-                            >
-                              {color.code}
-                            </div>
-                            <div className="flex-1 text-left">
-                              <div className="text-xs font-bold">{color.code}</div>
-                              <div className="text-[10px] opacity-60">{count} 颗 Beads</div>
-                            </div>
-                            {isSelected && <Sparkles className="w-4 h-4 text-[#a3bdb2]" />}
-                          </button>
-                        );
-                      });
-                  })()}
+          {!resultImage ? (
+            <div className="flex-1 flex flex-col items-center justify-center text-neutral-400 py-20">
+              <ImageIcon className="w-16 h-16 mb-4 opacity-20" />
+              <p>请先在“基础”页生成图纸<br/><span className="text-sm">Please generate pattern in Base tab first</span></p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 flex-1">
+              {/* Interactive Canvas */}
+              <div className="lg:col-span-8 bg-neutral-100 rounded-xl border border-[#a3bdb2]/30 overflow-hidden flex items-center justify-center relative group">
+                <div className="w-full h-full overflow-auto p-4 flex items-center justify-center">
+                  <img 
+                    src={resultImage} 
+                    alt="Interactive Pattern" 
+                    className="max-w-none shadow-lg cursor-crosshair transition-all"
+                    onClick={handleCanvasClick}
+                    style={{ maxHeight: '750px' }}
+                  />
+                </div>
+                <div className="absolute top-4 left-4 bg-white/90 backdrop-blur px-3 py-1.5 rounded-lg shadow-sm border border-[#a3bdb2]/30 text-xs font-medium text-[#20243F] opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                  点击格子定位色号 Click cell to seek color
                 </div>
               </div>
-              
-              <div className="bg-[#20243F] text-white rounded-xl p-4 space-y-2">
-                <p className="text-xs font-medium flex items-center gap-2">
-                  <Settings2 className="w-3.5 h-3.5" />
-                  使用技巧 Tips
-                </p>
-                <ul className="text-[10px] space-y-1 opacity-80 list-disc pl-4">
-                  <li>点击图中格子可快速定位色号</li>
-                  <li>开启锁定模式可同时点亮多种颜色</li>
-                  <li>专注模式下，非目标色将自动变暗</li>
-                </ul>
+
+              {/* Color Palette List */}
+              <div className="lg:col-span-4 flex flex-col space-y-4">
+                <div className="bg-neutral-50 rounded-xl p-4 border border-[#a3bdb2]/20 flex-1 overflow-hidden flex flex-col">
+                  <h3 className="text-sm font-bold text-[#20243F] mb-3 flex items-center gap-2">
+                    <LayoutGrid className="w-4 h-4" />
+                    本图色号清单 <span className="text-xs font-normal opacity-60">Color List</span>
+                  </h3>
+                  <div className="flex-1 overflow-y-auto pr-2 space-y-2 custom-scrollbar">
+                    {grid && (() => {
+                      const statsMap = new Map<string, { color: any, count: number }>();
+                      grid.flat().forEach(cell => {
+                        if (!statsMap.has(cell.code)) statsMap.set(cell.code, { color: cell, count: 0 });
+                        statsMap.get(cell.code)!.count++;
+                      });
+                      return Array.from(statsMap.values())
+                        .sort((a, b) => b.count - a.count)
+                        .map(({ color, count }) => {
+                          const isSelected = selectedColorCodes.includes(color.code);
+                          return (
+                            <button
+                              key={color.code}
+                              onClick={() => toggleColorSelection(color.code)}
+                              className={`w-full flex items-center gap-3 p-2 rounded-lg border transition-all ${
+                                isSelected 
+                                  ? 'bg-[#20243F] border-[#20243F] text-white shadow-md scale-[1.02]' 
+                                  : 'bg-white border-[#a3bdb2]/30 text-[#20243F] hover:border-[#20243F]/50'
+                              }`}
+                            >
+                              <div 
+                                className="w-8 h-8 rounded shadow-inner flex items-center justify-center text-[10px] font-bold"
+                                style={{ 
+                                  backgroundColor: `rgb(${color.rgb[0]}, ${color.rgb[1]}, ${color.rgb[2]})`,
+                                  color: (0.299 * color.rgb[0] + 0.587 * color.rgb[1] + 0.114 * color.rgb[2]) > 128 ? '#000' : '#fff'
+                                }}
+                              >
+                                {color.code}
+                              </div>
+                              <div className="flex-1 text-left">
+                                <div className="text-xs font-bold">{color.code}</div>
+                                <div className="text-[10px] opacity-60">{count} 颗 Beads</div>
+                              </div>
+                              {isSelected && <Sparkles className="w-4 h-4 text-[#a3bdb2]" />}
+                            </button>
+                          );
+                        });
+                    })()}
+                  </div>
+                </div>
+                
+                <div className="bg-[#20243F] text-white rounded-xl p-4 space-y-2">
+                  <p className="text-xs font-medium flex items-center gap-2">
+                    <Settings2 className="w-3.5 h-3.5" />
+                    使用技巧 Tips
+                  </p>
+                  <ul className="text-[10px] space-y-1 opacity-80 list-disc pl-4">
+                    <li>点击图中格子可快速定位色号</li>
+                    <li>开启锁定模式可同时点亮多种颜色</li>
+                    <li>专注模式下，非目标色将自动变暗</li>
+                  </ul>
+                </div>
               </div>
             </div>
+          )}
+        </div>
+
+        {/* Missing Bead Guide Section */}
+        <div className="bg-white rounded-2xl shadow-sm border border-[#a3bdb2]/40 p-6 space-y-4">
+          <div className="flex items-center gap-2 border-b border-[#a3bdb2]/30 pb-4">
+            <Sparkles className="w-6 h-6 text-[#20243F]" />
+            <h2 className="text-xl font-bold text-[#20243F]">缺豆指南 <span className="text-neutral-400 text-sm font-normal ml-1">Missing Bead Guide</span></h2>
           </div>
-        )}
-        
+          
+          <div className="flex flex-wrap gap-4 items-center min-h-[60px]">
+            {!missingColorCode ? (
+              <p className="text-xs text-neutral-500">点击上方色号清单中的颜色，在此查看替代方案。</p>
+            ) : (
+              <div className="flex items-center gap-4 bg-neutral-50 p-3 rounded-xl border border-[#a3bdb2]/20">
+                <div className="flex flex-col items-center gap-1">
+                  <span className="text-[9px] opacity-60">原色 Original</span>
+                  <div 
+                    className="w-10 h-10 rounded shadow-md flex items-center justify-center text-[10px] font-bold"
+                    style={{ 
+                      backgroundColor: `rgb(${palettes[palette].find(c => c.code === missingColorCode)?.rgb.join(',')})`,
+                      color: (0.299 * (palettes[palette].find(c => c.code === missingColorCode)?.rgb[0] || 0) + 0.587 * (palettes[palette].find(c => c.code === missingColorCode)?.rgb[1] || 0) + 0.114 * (palettes[palette].find(c => c.code === missingColorCode)?.rgb[2] || 0)) > 128 ? '#000' : '#fff'
+                    }}
+                  >
+                    {missingColorCode}
+                  </div>
+                </div>
+                
+                <div className="h-8 w-px bg-[#a3bdb2]/30 mx-2" />
+                
+                <div className="flex flex-col items-center gap-1">
+                  <span className="text-[9px] opacity-60">替代方案 Alternatives</span>
+                  <div className="flex gap-2">
+                    {(() => {
+                      const currentPalette = palettes[palette];
+                      const target = currentPalette.find(c => c.code === missingColorCode);
+                      if (!target) return [];
+                      
+                      return currentPalette
+                        .filter(c => c.code !== missingColorCode)
+                        .map(c => ({ color: c, dist: deltaE(target.lab, c.lab) }))
+                        .sort((a, b) => a.dist - b.dist)
+                        .slice(0, 3)
+                        .map(({ color: alt }) => (
+                          <div 
+                            key={alt.code}
+                            className="w-10 h-10 rounded shadow-sm flex items-center justify-center text-[10px] font-bold"
+                            style={{ 
+                              backgroundColor: `rgb(${alt.rgb.join(',')})`,
+                              color: (0.299 * alt.rgb[0] + 0.587 * alt.rgb[1] + 0.114 * alt.rgb[2]) > 128 ? '#000' : '#fff'
+                            }}
+                          >
+                            {alt.code}
+                          </div>
+                        ));
+                    })()}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
         {/* Hidden canvas for background rendering */}
         <canvas ref={canvasRef} className="hidden" />
 
@@ -945,7 +1007,6 @@ export default function App() {
           </button>
         </div>
       </div>
-    </div>
     );
   };
 
