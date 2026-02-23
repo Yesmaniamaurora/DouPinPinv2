@@ -1,8 +1,15 @@
 import express from 'express';
-import { createServer as createViteServer } from 'vite';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import Database from 'better-sqlite3';
 
-const db = new Database('keys.db');
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// In Vercel, we should use /tmp for any file writing, but it's not persistent.
+// For a real app, use a remote DB like Supabase or MongoDB.
+const dbPath = process.env.NODE_ENV === 'production' ? '/tmp/keys.db' : 'keys.db';
+const db = new Database(dbPath);
 db.exec(`
   CREATE TABLE IF NOT EXISTS licenses (
     key TEXT PRIMARY KEY,
@@ -120,6 +127,8 @@ app.delete('/api/admin/keys/:key', (req, res) => {
 
 async function setupVite() {
   if (process.env.NODE_ENV !== 'production') {
+    // Dynamically import vite only in development to avoid Vercel build errors
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
@@ -127,6 +136,11 @@ async function setupVite() {
     app.use(vite.middlewares);
   } else {
     app.use(express.static('dist'));
+    // Handle SPA routing: serve index.html for any unknown routes
+    app.get('*', (req, res, next) => {
+      if (req.path.startsWith('/api')) return next();
+      res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+    });
   }
 }
 

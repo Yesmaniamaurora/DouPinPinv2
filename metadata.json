@@ -1,5 +1,5 @@
 {
-  "name": "Remix: Remix: 拼豆图纸生成系统（remix备份版）",
+  "name": "Perler Beads by Juzi and Luo",
   "description": "基于 Web 的拼豆（Perler Beads）图纸生成系统，支持自定义尺寸、降采样算法和色号匹配。",
   "requestFramePermissions": []
 }

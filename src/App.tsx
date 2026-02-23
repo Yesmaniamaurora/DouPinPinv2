@@ -707,6 +707,33 @@ export default function App() {
 
     return (
       <div className="space-y-8 pb-24">
+        {/* Version Log Section */}
+        <div className="bg-[#20243F] rounded-2xl shadow-sm p-6 text-white space-y-4">
+          <div className="flex items-center gap-2 border-b border-white/20 pb-4">
+            <History className="w-6 h-6 text-[#a3bdb2]" />
+            <h2 className="text-xl font-bold">版本更新日志 <span className="text-[#a3bdb2] text-sm font-normal ml-1">Version Log</span></h2>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-xs">
+            <div className="space-y-2">
+              <p className="font-bold text-[#a3bdb2]">v2.2.0 (Latest)</p>
+              <ul className="list-disc pl-4 space-y-1 opacity-90">
+                <li>新增“区域颜色合并”：支持 BFS 算法手动/自动处理杂色</li>
+                <li>新增“缺豆指南”：智能推荐 3 种最相近的替代色号</li>
+                <li>优化降采样算法：默认切换为“频率最大化池化”，边缘更锐利</li>
+                <li>适配 Vercel 部署：修复云端环境下的后端运行冲突</li>
+              </ul>
+            </div>
+            <div className="space-y-2">
+              <p className="font-bold opacity-60">v2.1.0</p>
+              <ul className="list-disc pl-4 space-y-1 opacity-60">
+                <li>新增“高级背景处理”：支持基于洪水填充的自动抠图</li>
+                <li>新增“智能寻色辅助”：支持点击格子自动定位色号</li>
+                <li>新增“多选锁定”：支持同时点亮 3 种目标颜色</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
         {/* Background Removal Section */}
         <div className="bg-white rounded-2xl shadow-sm border border-[#a3bdb2]/40 p-6 space-y-6">
           <div className="flex items-center justify-between border-b border-[#a3bdb2]/30 pb-4">
@@ -1022,7 +1049,7 @@ export default function App() {
             <h1 className="text-xl font-semibold tracking-tight text-white">豆拼拼-图纸工厂 <span className="text-[#a3bdb2] text-base font-normal ml-2 hidden sm:inline">Perler Pattern Factory</span></h1>
           </div>
           <div className="flex items-center gap-4">
-            <div className="text-sm text-[#a3bdb2] font-medium">v2.1.0</div>
+            <div className="text-sm text-[#a3bdb2] font-medium">v2.2.0</div>
           </div>
         </div>
       </header>
