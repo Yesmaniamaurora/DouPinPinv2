@@ -294,4 +294,144 @@ export class PerlerBeadGenerator {
       grid: grid
     };
   }
+
+  static mergeRegion(
+    grid: ColorInfo[][],
+    startR: number,
+    startC: number,
+    threshold: number
+  ): ColorInfo[][] {
+    const rows = grid.length;
+    const cols = grid[0].length;
+    const startColor = grid[startR][startC];
+    const visited = new Set<string>();
+    const queue: [number, number][] = [[startR, startC]];
+    const region: { r: number, c: number, color: ColorInfo }[] = [];
+
+    while (queue.length > 0) {
+      const [r, c] = queue.shift()!;
+      const key = `${r},${c}`;
+      if (visited.has(key)) continue;
+      visited.add(key);
+      
+      const currentColor = grid[r][c];
+      // Euclidean distance in RGB space
+      const dist = Math.sqrt(
+        Math.pow(startColor.rgb[0] - currentColor.rgb[0], 2) +
+        Math.pow(startColor.rgb[1] - currentColor.rgb[1], 2) +
+        Math.pow(startColor.rgb[2] - currentColor.rgb[2], 2)
+      );
+
+      if (dist <= threshold) {
+        region.push({ r, c, color: currentColor });
+        
+        const dirs = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+        for (const [dr, dc] of dirs) {
+          const nr = r + dr, nc = c + dc;
+          if (nr >= 0 && nr < rows && nc >= 0 && nc < cols) {
+            queue.push([nr, nc]);
+          }
+        }
+      }
+    }
+
+    if (region.length > 1) {
+      const freqMap = new Map<string, { color: ColorInfo, count: number }>();
+      region.forEach(p => {
+        const key = p.color.code;
+        if (!freqMap.has(key)) freqMap.set(key, { color: p.color, count: 0 });
+        freqMap.get(key)!.count++;
+      });
+
+      let dominantColor = region[0].color;
+      let maxCount = -1;
+      freqMap.forEach(val => {
+        if (val.count > maxCount) {
+          maxCount = val.count;
+          dominantColor = val.color;
+        }
+      });
+
+      const newGrid = grid.map(row => [...row]);
+      region.forEach(p => {
+        newGrid[p.r][p.c] = { ...dominantColor };
+      });
+      return newGrid;
+    }
+
+    return grid;
+  }
+
+  static autoMerge(
+    grid: ColorInfo[][],
+    threshold: number
+  ): ColorInfo[][] {
+    const rows = grid.length;
+    const cols = grid[0].length;
+    const globalVisited = new Set<string>();
+    const newGrid = grid.map(row => [...row]);
+
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const key = `${r},${c}`;
+        if (globalVisited.has(key)) continue;
+
+        // BFS for this region
+        const startColor = newGrid[r][c];
+        const queue: [number, number][] = [[r, c]];
+        const region: { r: number, c: number, color: ColorInfo }[] = [];
+        const localVisited = new Set<string>();
+
+        while (queue.length > 0) {
+          const [currR, currC] = queue.shift()!;
+          const localKey = `${currR},${currC}`;
+          if (localVisited.has(localKey) || globalVisited.has(localKey)) continue;
+          
+          const currentColor = newGrid[currR][currC];
+          const dist = Math.sqrt(
+            Math.pow(startColor.rgb[0] - currentColor.rgb[0], 2) +
+            Math.pow(startColor.rgb[1] - currentColor.rgb[1], 2) +
+            Math.pow(startColor.rgb[2] - currentColor.rgb[2], 2)
+          );
+
+          if (dist <= threshold) {
+            localVisited.add(localKey);
+            globalVisited.add(localKey);
+            region.push({ r: currR, c: currC, color: currentColor });
+
+            const dirs = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+            for (const [dr, dc] of dirs) {
+              const nr = currR + dr, nc = currC + dc;
+              if (nr >= 0 && nr < rows && nc >= 0 && nc < cols) {
+                queue.push([nr, nc]);
+              }
+            }
+          }
+        }
+
+        if (region.length > 1) {
+          const freqMap = new Map<string, { color: ColorInfo, count: number }>();
+          region.forEach(p => {
+            const k = p.color.code;
+            if (!freqMap.has(k)) freqMap.set(k, { color: p.color, count: 0 });
+            freqMap.get(k)!.count++;
+          });
+
+          let dominantColor = region[0].color;
+          let maxCount = -1;
+          freqMap.forEach(val => {
+            if (val.count > maxCount) {
+              maxCount = val.count;
+              dominantColor = val.color;
+            }
+          });
+
+          region.forEach(p => {
+            newGrid[p.r][p.c] = { ...dominantColor };
+          });
+        }
+      }
+    }
+    return newGrid;
+  }
 }

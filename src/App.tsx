@@ -25,7 +25,7 @@ export default function App() {
   const [image, setImage] = useState<string | null>(null);
   const [width, setWidth] = useState<number>(40);
   const [height, setHeight] = useState<number>(40);
-  const [algorithm, setAlgorithm] = useState<Algorithm>('average');
+  const [algorithm, setAlgorithm] = useState<Algorithm>('dominant_pooling');
   const [palette, setPalette] = useState<PaletteKey>('mard');
   const [brightness, setBrightness] = useState<number>(0);
   const [removeBackground, setRemoveBackground] = useState<boolean>(false);
@@ -36,6 +36,10 @@ export default function App() {
   const [grid, setGrid] = useState<any[][] | null>(null);
   const [selectedColorCodes, setSelectedColorCodes] = useState<string[]>([]);
   const [isLocked, setIsLocked] = useState(false);
+  
+  // BFS States
+  const [bfsThreshold, setBfsThreshold] = useState<number>(15);
+  const [isBfsMode, setIsBfsMode] = useState<boolean>(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -202,8 +206,13 @@ export default function App() {
       const r = Math.floor((realY - offsetY) / cellSize);
       
       if (r >= 0 && r < rows && c >= 0 && c < cols) {
-        const color = grid[r][c];
-        toggleColorSelection(color.code);
+        if (isBfsMode) {
+          const newGrid = PerlerBeadGenerator.mergeRegion(grid, r, c, bfsThreshold);
+          setGrid(newGrid);
+        } else {
+          const color = grid[r][c];
+          toggleColorSelection(color.code);
+        }
       }
     }
   };
@@ -306,6 +315,12 @@ export default function App() {
     setIsAdmin(false);
     setLicenseKey('');
     setActiveTab('base');
+  };
+
+  const handleAutoMerge = () => {
+    if (!grid) return;
+    const newGrid = PerlerBeadGenerator.autoMerge(grid, bfsThreshold);
+    setGrid(newGrid);
   };
 
   const renderAdminTab = () => {
@@ -532,10 +547,10 @@ export default function App() {
               onChange={(e) => setAlgorithm(e.target.value as Algorithm)}
               className="block w-full rounded-lg border-[#a3bdb2]/50 shadow-sm focus:border-[#20243F] focus:ring-[#20243F] sm:text-sm px-3 py-2 border bg-white outline-none"
             >
-              <option value="average">区域平均 (Average) - 推荐</option>
-              <option value="dominant_pooling">频率最大化池化 (Dominant Pooling) - 锐利</option>
-              <option value="gradient_enhanced">梯度增强 (Gradient Enhanced)</option>
-              <option value="nearest">临近插值 (Nearest)</option>
+              <option value="average">区域平均 (Average)</option>
+              <option value="dominant_pooling">频率最大化池化 (Dominant Pooling) - 默认</option>
+              <option value="gradient_enhanced">边缘识别 (Gradient Enhanced)</option>
+              <option value="nearest">中心像素 (Nearest)</option>
             </select>
           </div>
 
@@ -622,6 +637,9 @@ export default function App() {
                   className="max-w-none shadow-md"
                   style={{ maxHeight: '800px' }}
                 />
+                <div className="absolute bottom-2 right-4 text-[10px] text-neutral-400 bg-white/80 px-2 py-0.5 rounded-full shadow-sm">
+                  Num of Colors: {grid ? new Set(grid.flat().map(c => c.code)).size : 0}
+                </div>
               </div>
             ) : (
               <div className="text-center text-neutral-400">
@@ -739,6 +757,63 @@ export default function App() {
               } transition-colors`}
             >
               {isGenerating ? <Loader2 className="animate-spin h-5 w-5 mr-2" /> : '应用设置并重新生成 Apply & Re-generate'}
+            </button>
+          </div>
+        </div>
+
+        {/* Region Color Merging Section */}
+        <div className="bg-white rounded-2xl shadow-sm border border-[#a3bdb2]/40 p-6 space-y-6">
+          <div className="flex items-center justify-between border-b border-[#a3bdb2]/30 pb-4">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-6 h-6 text-[#20243F]" />
+              <h2 className="text-xl font-bold text-[#20243F]">区域颜色合并 (BFS 算法) <span className="text-neutral-400 text-sm font-normal ml-1">Region Color Merging</span></h2>
+            </div>
+            <div className="flex items-center gap-3">
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input 
+                  type="checkbox" 
+                  checked={isBfsMode} 
+                  onChange={(e) => setIsBfsMode(e.target.checked)}
+                  className="sr-only peer" 
+                />
+                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-[#a3bdb2]/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#20243F]"></div>
+                <span className="ml-3 text-sm font-medium text-[#20243F]">{isBfsMode ? '手动吸取开启' : '手动吸取关闭'}</span>
+              </label>
+            </div>
+          </div>
+
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <div className="space-y-4">
+                <div className="flex justify-between items-center">
+                  <label className="block text-sm font-medium text-neutral-700">合并阈值 <span className="text-neutral-400 font-normal ml-1">Threshold</span></label>
+                  <span className="text-xs font-bold text-[#20243F] bg-[#a3bdb2]/20 px-2 py-1 rounded">{bfsThreshold}</span>
+                </div>
+                <input 
+                  type="range" 
+                  min="0" 
+                  max="100" 
+                  value={bfsThreshold} 
+                  onChange={(e) => setBfsThreshold(parseInt(e.target.value))}
+                  className="w-full accent-[#20243F]"
+                />
+                <p className="text-[10px] text-neutral-500">数值越大，越多的相近颜色会被合并。开启手动吸取后点击下方预览图中的格子即可触发合并，或者点击下方“全图自动合并”。</p>
+              </div>
+              <div className="bg-neutral-50 rounded-xl p-4 border border-[#a3bdb2]/20 text-xs text-neutral-600 space-y-2">
+                <p className="font-bold flex items-center gap-1"><Settings2 className="w-3 h-3" /> 使用说明 Usage:</p>
+                <p>1. 调整合并阈值。<br/>2. <b>手动合并：</b>开启“手动吸取开启”开关，在下方“智能寻色辅助”或“预览结果”区域点击你想要合并的色块。<br/>3. <b>自动合并：</b>点击下方“全图自动合并”按钮，系统将根据阈值自动处理全图杂色。</p>
+              </div>
+            </div>
+            
+            <button
+              onClick={handleAutoMerge}
+              disabled={!grid || isGenerating}
+              className={`w-full flex justify-center items-center py-3 px-4 border border-transparent rounded-xl shadow-sm text-sm font-medium text-white ${
+                !grid || isGenerating ? 'bg-[#a3bdb2] cursor-not-allowed text-white/70' : 'bg-[#20243F] hover:bg-[#20243F]/90'
+              } transition-colors`}
+            >
+              <Sparkles className="w-4 h-4 mr-2" />
+              全图自动合并 (Auto Merge All)
             </button>
           </div>
         </div>
